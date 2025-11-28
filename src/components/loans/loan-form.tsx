@@ -315,6 +315,18 @@ export function LoanForm({ onCancel, onSubmit, initialData, bankAccounts, payees
                                     </SelectContent>
                                     {depositAccount && (
                                         <FormDescription className="pt-2">
+                                            موجودی فعلی این حساب: {formatCurrency(depositAccount.balance, 'IRT')}
+                                        </FormDescription>
+                                    )}
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                        )}
+                    </div>
+                )}
+            </CardContent>
+            <CardFooter className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={onCancel}>لغو</Button>
                 <Button type="submit">ذخیره</Button>
             </CardFooter>
