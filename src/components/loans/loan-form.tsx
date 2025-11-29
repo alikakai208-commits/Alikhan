@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/card";
 import type { Loan, BankAccount, Payee } from "@/lib/types";
 import { JalaliDatePicker } from "@/components/ui/jalali-calendar";
-import { cn, formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { Switch } from "../ui/switch";
 import { USER_DETAILS } from "@/lib/constants";
 
@@ -130,9 +130,7 @@ export function LoanForm({
     }
   }, [initialData, form]);
 
-  const depositAccount = bankAccounts.find(
-    (acc) => acc.id === watchDepositToAccountId
-  );
+  const depositAccount = bankAccounts.find((acc) => acc.id === watchDepositToAccountId);
 
   const handleFormSubmit = useCallback(
     (data: LoanFormValues) => {
@@ -233,6 +231,7 @@ export function LoanForm({
                 />
               )}
             </div>
+
             <div className="rounded-lg border p-4 space-y-4">
               <p className="text-sm text-muted-foreground">
                 اطلاعات زیر فقط برای یادآوری و آمار است و در محاسبات تاثیری ندارد.
@@ -331,17 +330,25 @@ export function LoanForm({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {bankAccounts.map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {`${account.bankName} ${getOwnerName(account)}`}
-                              </SelectItem>
-                            ))}
+                            {bankAccounts.map((account) => {
+                              const usableBalance =
+                                account.balance - (account.blockedBalance ?? 0);
+                              return (
+                                <SelectItem key={account.id} value={account.id}>
+                                  {`${account.bankName} ${getOwnerName(account)} (قابل استفاده: ${formatCurrency(usableBalance, "IRT")})`}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
 
                         {depositAccount && (
                           <FormDescription className="pt-2">
-                            موجودی فعلی این حساب: {formatCurrency(depositAccount.balance, "IRT")}
+                            موجودی قابل استفاده این حساب:{" "}
+                            {formatCurrency(
+                              depositAccount.balance - (depositAccount.blockedBalance ?? 0),
+                              "IRT"
+                            )}
                           </FormDescription>
                         )}
 
