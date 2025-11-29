@@ -30,12 +30,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CurrencyInput } from '@/components/ui/input';
-import type { FinancialGoal, BankAccount, OwnerId } from '@/lib/types';
+import type { FinancialGoal, BankAccount } from '@/lib/types';
 import { formatCurrency, cn } from '@/lib/utils';
 import { USER_DETAILS } from '@/lib/constants';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Info } from 'lucide-react';
-
 
 const createFormSchema = (maxAmount: number) => z.object({
   bankAccountId: z.string().min(1, { message: 'لطفا یک کارت برای برداشت انتخاب کنید.' }),
@@ -44,7 +43,6 @@ const createFormSchema = (maxAmount: number) => z.object({
     .positive({ message: 'مبلغ باید یک عدد مثبت باشد.' })
     .max(maxAmount, { message: `مبلغ نمی‌تواند از مبلغ باقی‌مانده بیشتر باشد.`}),
 });
-
 
 interface AddToGoalDialogProps {
   goal: FinancialGoal;
@@ -61,26 +59,30 @@ export function AddToGoalDialog({
   onOpenChange,
   onSubmit,
 }: AddToGoalDialogProps) {
-    
   const remainingAmount = goal.targetAmount - goal.currentAmount;
   const formSchema = createFormSchema(remainingAmount);
   type AddToGoalFormValues = z.infer<typeof formSchema>;
 
+  // انتخاب پیش‌فرض پایدار: اولین کارت موجود (اگر هست)
+  const defaultBankAccountId = bankAccounts[0]?.id || '';
+
   const form = useForm<AddToGoalFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      bankAccountId: bankAccounts[0]?.id || '',
+      bankAccountId: defaultBankAccountId,
       amount: 0,
     },
   });
-  
-  React.useEffect(() => {
-    form.reset({
-      bankAccountId: bankAccounts[0]?.id || '',
-      amount: 0,
-    })
-  }, [goal, bankAccounts, form]);
 
+  // ریست فقط هنگام باز/بسته شدن دیالوگ یا تغییر خود هدف
+  React.useEffect(() => {
+    if (isOpen) {
+      form.reset({
+        bankAccountId: defaultBankAccountId,
+        amount: 0,
+      });
+    }
+  }, [isOpen, goal, defaultBankAccountId, form]);
 
   const getOwnerName = (account: BankAccount) => {
     if (account.ownerId === 'shared') return "(مشترک)";
@@ -90,7 +92,10 @@ export function AddToGoalDialog({
 
   const selectedBankAccountId = form.watch('bankAccountId');
   const selectedBankAccount = bankAccounts.find(acc => acc.id === selectedBankAccountId);
-  const availableBalance = selectedBankAccount ? selectedBankAccount.balance - (selectedBankAccount.blockedBalance || 0) : 0;
+
+  const availableBalance = selectedBankAccount
+    ? selectedBankAccount.balance - (selectedBankAccount.blockedBalance ?? 0)
+    : 0;
 
   function handleFormSubmit(data: AddToGoalFormValues) {
     onSubmit({
@@ -99,7 +104,10 @@ export function AddToGoalDialog({
     });
   }
 
-  const sortedBankAccounts = [...bankAccounts].sort((a,b) => b.balance - a.balance);
+  const sortedBankAccounts = React.useMemo(
+    () => [...bankAccounts].sort((a, b) => (b.balance - (b.blockedBalance ?? 0)) - (a.balance - (a.blockedBalance ?? 0))),
+    [bankAccounts]
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -112,13 +120,13 @@ export function AddToGoalDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
-             <Alert variant="default" className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <AlertDescription className="text-blue-700 dark:text-blue-300">
-                    مبلغ باقی‌مانده تا رسیدن به هدف: <span className="font-bold font-mono">{formatCurrency(remainingAmount, 'IRT')}</span>
-                </AlertDescription>
-             </Alert>
-            
+            <Alert variant="default" className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <AlertDescription className="text-blue-700 dark:text-blue-300">
+                مبلغ باقی‌مانده تا رسیدن به هدف: <span className="font-bold font-mono">{formatCurrency(remainingAmount, 'IRT')}</span>
+              </AlertDescription>
+            </Alert>
+
             <FormField
               control={form.control}
               name="bankAccountId"
@@ -132,11 +140,14 @@ export function AddToGoalDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {sortedBankAccounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id}>
-                           {`${account.bankName} ${getOwnerName(account)} (قابل استفاده: ${formatCurrency(account.balance - (account.blockedBalance || 0), 'IRT')})`}
-                        </SelectItem>
-                      ))}
+                      {sortedBankAccounts.map((account) => {
+                        const usableBalance = account.balance - (account.blockedBalance ?? 0);
+                        return (
+                          <SelectItem key={account.id} value={account.id}>
+                            {`${account.bankName} ${getOwnerName(account)} (قابل استفاده: ${formatCurrency(usableBalance, 'IRT')})`}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -155,14 +166,14 @@ export function AddToGoalDialog({
                   </FormControl>
                   {selectedBankAccount && (
                     <FormDescription className={cn(availableBalance < field.value && "text-destructive")}>
-                        موجودی قابل استفاده: {formatCurrency(availableBalance, 'IRT')}
+                      موجودی قابل استفاده: {formatCurrency(availableBalance, 'IRT')}
                     </FormDescription>
                   )}
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 انصراف
