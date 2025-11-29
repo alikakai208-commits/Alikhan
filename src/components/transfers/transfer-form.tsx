@@ -13,7 +13,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input, CurrencyInput } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import type { BankAccount, UserProfile, OwnerId } from '@/lib/types';
+import type { BankAccount } from '@/lib/types';
 import { ArrowDown, ArrowRightLeft } from 'lucide-react';
 import { Textarea } from '../ui/textarea';
 import { formatCurrency } from '@/lib/utils';
@@ -44,6 +44,12 @@ interface TransferFormProps {
   user: User | null;
 }
 
+const getOwnerName = (account: BankAccount) => {
+  if (account.ownerId === 'shared') return "(مشترک)";
+  const userDetail = USER_DETAILS[account.ownerId as 'ali' | 'fatemeh'];
+  return userDetail ? `(${userDetail.firstName})` : "(ناشناس)";
+};
+
 export function TransferForm({ onSubmit, bankAccounts, user }: TransferFormProps) {
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(formSchema),
@@ -54,12 +60,6 @@ export function TransferForm({ onSubmit, bankAccounts, user }: TransferFormProps
       description: '',
     },
   });
-  
-  const getOwnerName = (account: BankAccount) => {
-    if (account.ownerId === 'shared') return "(مشترک)";
-    const userDetail = USER_DETAILS[account.ownerId as 'ali' | 'fatemeh'];
-    return userDetail ? `(${userDetail.firstName})` : "(ناشناس)";
-  };
 
   function handleFormSubmit(data: TransferFormValues) {
     onSubmit(data);
@@ -69,11 +69,18 @@ export function TransferForm({ onSubmit, bankAccounts, user }: TransferFormProps
   const fromAccountId = form.watch('fromBankAccountId');
   const fromAccount = bankAccounts.find(acc => acc.id === fromAccountId);
 
-  const sortedFromAccounts = [...bankAccounts].sort((a, b) => b.balance - a.balance);
+  const sortedFromAccounts = React.useMemo(
+    () => [...bankAccounts].sort(
+      (a, b) => (b.balance - (b.blockedBalance ?? 0)) - (a.balance - (a.blockedBalance ?? 0))
+    ),
+    [bankAccounts]
+  );
 
   // Filter destination accounts based on the source account
   const availableToAccounts = React.useMemo(() => {
-    const sorted = [...bankAccounts].sort((a,b) => b.balance - a.balance);
+    const sorted = [...bankAccounts].sort(
+      (a, b) => (b.balance - (b.blockedBalance ?? 0)) - (a.balance - (a.blockedBalance ?? 0))
+    );
     return sorted.filter(acc => acc.id !== fromAccountId);
   }, [fromAccountId, bankAccounts]);
 
@@ -85,108 +92,115 @@ export function TransferForm({ onSubmit, bankAccounts, user }: TransferFormProps
     }
   }, [fromAccountId, availableToAccounts, form]);
 
-
   return (
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2">
-            <ArrowRightLeft className="h-6 w-6 text-primary"/>
-            <span>فرم انتقال وجه</span>
-          </CardTitle>
-        </CardHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleFormSubmit)}>
-            <CardContent className="space-y-6">
-              <FormField
-                control={form.control}
-                name="fromBankAccountId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>از حساب</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="یک حساب بانکی به عنوان مبدا انتخاب کنید" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {sortedFromAccounts.map((account) => (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="font-headline flex items-center gap-2">
+          <ArrowRightLeft className="h-6 w-6 text-primary"/>
+          <span>فرم انتقال وجه</span>
+        </CardTitle>
+      </CardHeader>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleFormSubmit)}>
+          <CardContent className="space-y-6">
+            <FormField
+              control={form.control}
+              name="fromBankAccountId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>از حساب</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="یک حساب بانکی به عنوان مبدا انتخاب کنید" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {sortedFromAccounts.map((account) => {
+                        const usableBalance = account.balance - (account.blockedBalance ?? 0);
+                        return (
                           <SelectItem key={account.id} value={account.id}>
-                            {`${account.bankName} ${getOwnerName(account)} - (قابل استفاده: ${formatCurrency(account.balance - (account.blockedBalance || 0), 'IRT')})`}
+                            {`${account.bankName} ${getOwnerName(account)} - (قابل استفاده: ${formatCurrency(usableBalance, 'IRT')})`}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="flex justify-center">
-                  <ArrowDown className="h-6 w-6 text-muted-foreground" />
-              </div>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="toBankAccountId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>به حساب</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={!fromAccountId}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={!fromAccountId ? "ابتدا حساب مبدا را انتخاب کنید" : "یک حساب بانکی به عنوان مقصد انتخاب کنید"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableToAccounts.map((account) => (
+            <div className="flex justify-center">
+              <ArrowDown className="h-6 w-6 text-muted-foreground" />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="toBankAccountId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>به حساب</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!fromAccountId}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={!fromAccountId ? "ابتدا حساب مبدا را انتخاب کنید" : "یک حساب بانکی به عنوان مقصد انتخاب کنید"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {availableToAccounts.map((account) => {
+                        const usableBalance = account.balance - (account.blockedBalance ?? 0);
+                        return (
                           <SelectItem key={account.id} value={account.id}>
-                            {`${account.bankName} ${getOwnerName(account)} - (موجودی: ${formatCurrency(account.balance, 'IRT')})`}
+                            {`${account.bankName} ${getOwnerName(account)} - (موجودی: ${formatCurrency(usableBalance, 'IRT')})`}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>مبلغ انتقال (تومان)</FormLabel>
-                    <FormControl>
-                      <CurrencyInput value={field.value} onChange={field.onChange} />
-                    </FormControl>
-                    {fromAccount && (
-                        <p className="text-xs text-muted-foreground pt-1">
-                            موجودی قابل استفاده مبدا: {formatCurrency(fromAccount.balance - (fromAccount.blockedBalance || 0), 'IRT')}
-                        </p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>توضیحات (اختیاری)</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="شرح مختصری از این انتقال..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-            <CardFooter>
-                <Button type="submit" className="w-full">تایید و انتقال</Button>
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>مبلغ انتقال (تومان)</FormLabel>
+                  <FormControl>
+                    <CurrencyInput value={field.value} onChange={field.onChange} />
+                  </FormControl>
+                  {fromAccount && (
+                    <p className="text-xs text-muted-foreground pt-1">
+                      موجودی قابل استفاده مبدا: {formatCurrency(fromAccount.balance - (fromAccount.blockedBalance ?? 0), 'IRT')}
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>توضیحات (اختیاری)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="شرح مختصری از این انتقال..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+          <CardFooter>
+            <Button type="submit" className="w-full">تایید و انتقال</Button>
+          </CardFooter>
+        </form>
+      </Form>
+    </Card>
   );
 }
