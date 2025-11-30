@@ -1,14 +1,14 @@
 "use client"
 
 import React, { useState, useEffect } from "react";
-import DatePicker, { type DayValue } from "@hassanmojab/react-modern-calendar-datepicker";
+import DatePicker from "@hassanmojab/react-modern-calendar-datepicker";
 import "@hassanmojab/react-modern-calendar-datepicker/lib/DatePicker.css";
 
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -82,8 +82,8 @@ export function JalaliDatePicker({ value, onChange, className, placeholder = "ی
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
         <Button
           variant={"outline"}
           className={cn(
@@ -95,8 +95,10 @@ export function JalaliDatePicker({ value, onChange, className, placeholder = "ی
           <CalendarIcon className="ml-2 h-4 w-4" />
           {value ? formatInputValue() : <span>{placeholder}</span>}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 calendar-container">
+      </DialogTrigger>
+      <DialogContent 
+        className="p-0"
+      >
         <Calendar
             value={selectedDay}
             onChange={handleDayChange}
@@ -104,7 +106,7 @@ export function JalaliDatePicker({ value, onChange, className, placeholder = "ی
             locale="fa" // This enables the Persian calendar
             calendarClassName="responsive-calendar" // for custom styling
         />
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   )
 }
